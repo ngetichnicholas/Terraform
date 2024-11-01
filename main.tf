@@ -53,6 +53,17 @@ resource "aws_subnet" "vivaldi_private_subnet_2" {
   }
 }
 
+# RDS Subnet Group
+resource "aws_db_subnet_group" "vivaldi_db_subnet_group" {
+  name       = "vivaldi-db-subnet-group"
+  subnet_ids = [aws_subnet.vivaldi_private_subnet_1.id, aws_subnet.vivaldi_private_subnet_2.id]
+
+  tags = {
+    Name = "Vivaldi-DB-Subnet-Group"
+  }
+}
+
+
 # Internet Gateway
 resource "aws_internet_gateway" "vivaldi_ig" {
   vpc_id = aws_vpc.vivaldi_vpc.id
@@ -245,6 +256,70 @@ resource "aws_security_group" "vivaldi_backend_sg" {
   }
 }
 
+# MySQL Security Group
+resource "aws_security_group" "vivaldi_mysql_sg" {
+  vpc_id = aws_vpc.vivaldi_vpc.id
+  name   = "vivaldi-mysql-sg"
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Change this to a specific IP or CIDR block for more security
+  }
+
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["192.168.0.16/28", "192.168.0.32/28"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Vivaldi-MySQL-SG"
+  }
+}
+
+# Aurora RDS Cluster
+resource "aws_rds_cluster" "vivaldi_aurora_cluster" {
+  cluster_identifier      = "vivaldi"
+  engine                  = "aurora-mysql"
+  engine_version          = "8.0.mysql_aurora.3.05.2" # Specify the latest 8.0 compatible version available if needed
+  master_username         = var.db_username
+  master_password         = var.db_password
+  database_name           = var.db_name
+  availability_zones      = ["us-west-2b", "us-west-2c"]  # Multi-AZ deployment
+  db_subnet_group_name    = aws_db_subnet_group.vivaldi_db_subnet_group.name
+  vpc_security_group_ids  = [aws_security_group.vivaldi_mysql_sg.id] # Use the MySQL SG for access control
+
+  backup_retention_period = 7
+  preferred_backup_window = "07:00-09:00"
+
+    tags = {
+    Name = "Vivaldi-Aurora-Cluster"
+  }
+}
+
+resource "aws_rds_cluster_instance" "vivaldi_aurora_instance" {
+  count                    = 2
+  identifier               = "vivaldi-instance-${count.index}"
+  cluster_identifier       = aws_rds_cluster.vivaldi_aurora_cluster.id
+  instance_class           = "db.t3.medium"
+  engine                   = "aurora-mysql"
+  engine_version           = aws_rds_cluster.vivaldi_aurora_cluster.engine_version
+  publicly_accessible      = false
+
+  # Multi-AZ Deployment
+  availability_zone        = element(["us-west-2b", "us-west-2c"], count.index)
+
+}
+
 # Frontend EC2 Instance
 resource "aws_instance" "vivaldi_frontend" {
   ami                    = "ami-04dd23e62ed049936"
@@ -288,5 +363,20 @@ resource "aws_instance" "vivaldi_backend" {
     Name = "Vivaldi-Backend"
   }
 }
+
+# Outputs
+output "db_endpoint" {
+  value = aws_rds_cluster.vivaldi_aurora_cluster.endpoint
+}
+
+# # S3 Bucket 
+# resource "aws_s3_bucket" "vivaldi_bucket" {
+#   bucket = "vivaldi-bucket-2024"
+
+#   tags = {
+#     Name        = "Vivaldi-S3Bucket"
+#     Environment = "Dev"
+#   }
+# }
 
 
