@@ -22,21 +22,41 @@ resource "aws_vpc" "vivaldi_vpc" {
 }
 
 # Public Subnet
-resource "aws_subnet" "vivaldi_public_subnet" {
+resource "aws_subnet" "vivaldi_public_subnet_1" {
   vpc_id            = aws_vpc.vivaldi_vpc.id
   cidr_block        = "192.168.0.0/28"  # 16 IPs
   availability_zone = "us-west-2a"
 
   tags = {
-    Name = "Vivaldi-PublicSubnet"
+    Name = "Vivaldi-PublicSubnet-1"
+  }
+}
+
+resource "aws_subnet" "vivaldi_public_subnet_2" {
+  vpc_id            = aws_vpc.vivaldi_vpc.id
+  cidr_block        = "192.168.0.16/28"  # 16 IPs
+  availability_zone = "us-west-2b"
+
+  tags = {
+    Name = "Vivaldi-PublicSubnet-2"
+  }
+}
+
+resource "aws_subnet" "vivaldi_public_subnet_3" {
+  vpc_id            = aws_vpc.vivaldi_vpc.id
+  cidr_block        = "192.168.0.32/28"  # 16 IPs
+  availability_zone = "us-west-2c"
+
+  tags = {
+    Name = "Vivaldi-PublicSubnet-3"
   }
 }
 
 # Private Subnets
 resource "aws_subnet" "vivaldi_private_subnet_1" {
   vpc_id            = aws_vpc.vivaldi_vpc.id
-  cidr_block        = "192.168.0.16/28"  # 16 IPs
-  availability_zone = "us-west-2b"
+  cidr_block        = "192.168.0.48/28"  # 16 IPs
+  availability_zone = "us-west-2a"
 
   tags = {
     Name = "Vivaldi-PrivateSubnet-1"
@@ -45,18 +65,32 @@ resource "aws_subnet" "vivaldi_private_subnet_1" {
 
 resource "aws_subnet" "vivaldi_private_subnet_2" {
   vpc_id            = aws_vpc.vivaldi_vpc.id
-  cidr_block        = "192.168.0.32/28"  # 16 IPs
-  availability_zone = "us-west-2c"
+  cidr_block        = "192.168.0.64/28"  # 16 IPs
+  availability_zone = "us-west-2b"
 
   tags = {
     Name = "Vivaldi-PrivateSubnet-2"
   }
 }
 
+resource "aws_subnet" "vivaldi_private_subnet_3" {
+  vpc_id            = aws_vpc.vivaldi_vpc.id
+  cidr_block        = "192.168.0.80/28"  # 16 IPs
+  availability_zone = "us-west-2c"
+
+  tags = {
+    Name = "Vivaldi-PrivateSubnet-3"
+  }
+}
+
 # RDS Subnet Group
 resource "aws_db_subnet_group" "vivaldi_db_subnet_group" {
   name       = "vivaldi-db-subnet-group"
-  subnet_ids = [aws_subnet.vivaldi_private_subnet_1.id, aws_subnet.vivaldi_private_subnet_2.id]
+  subnet_ids = [
+    aws_subnet.vivaldi_private_subnet_1.id,
+    aws_subnet.vivaldi_private_subnet_2.id,
+    aws_subnet.vivaldi_private_subnet_3.id
+  ]
 
   tags = {
     Name = "Vivaldi-DB-Subnet-Group"
@@ -87,9 +121,19 @@ resource "aws_route_table" "vivaldi_public_rt" {
   }
 }
 
-# Route Table Association for Public Subnet
-resource "aws_route_table_association" "public_subnet_association" {
-  subnet_id      = aws_subnet.vivaldi_public_subnet.id
+# Route Table Association for Public Subnets
+resource "aws_route_table_association" "public_subnet_1_association" {
+  subnet_id      = aws_subnet.vivaldi_public_subnet_1.id
+  route_table_id = aws_route_table.vivaldi_public_rt.id
+}
+
+resource "aws_route_table_association" "public_subnet_2_association" {
+  subnet_id      = aws_subnet.vivaldi_public_subnet_2.id
+  route_table_id = aws_route_table.vivaldi_public_rt.id
+}
+
+resource "aws_route_table_association" "public_subnet_3_association" {
+  subnet_id      = aws_subnet.vivaldi_public_subnet_3.id
   route_table_id = aws_route_table.vivaldi_public_rt.id
 }
 
@@ -101,7 +145,7 @@ resource "aws_eip" "vivaldi_nat_eip" {
 # NAT Gateway
 resource "aws_nat_gateway" "vivaldi_nat" {
   allocation_id = aws_eip.vivaldi_nat_eip.id
-  subnet_id    = aws_subnet.vivaldi_public_subnet.id
+  subnet_id     = aws_subnet.vivaldi_public_subnet_1.id  # Updated to a specific public subnet
 
   tags = {
     Name = "Vivaldi-NAT-Gateway"
@@ -134,6 +178,10 @@ resource "aws_route_table_association" "private_subnet_2_association" {
   route_table_id = aws_route_table.vivaldi_private_rt.id
 }
 
+resource "aws_route_table_association" "private_subnet_3_association" {
+  subnet_id      = aws_subnet.vivaldi_private_subnet_3.id
+  route_table_id = aws_route_table.vivaldi_private_rt.id
+}
 # Elastic IP for Frontend EC2 Instance
 resource "aws_eip" "vivaldi_frontend_eip" {
   instance = aws_instance.vivaldi_frontend.id
@@ -144,7 +192,7 @@ resource "aws_eip" "vivaldi_frontend_eip" {
 resource "aws_instance" "vivaldi_jumpbox" {
   ami                    = "ami-04dd23e62ed049936"  # Specify an appropriate, secure AMI
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.vivaldi_public_subnet.id
+  subnet_id              = aws_subnet.vivaldi_public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.vivaldi_jumpbox_sg.id]
 
   associate_public_ip_address = true
@@ -264,14 +312,14 @@ resource "aws_security_group" "vivaldi_mysql_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Change this to a specific IP or CIDR block for more security
+    cidr_blocks = ["192.168.0.0/24"] # Change this to a specific IP or CIDR block for more security
   }
 
   ingress {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = ["192.168.0.16/28", "192.168.0.32/28"]
+    cidr_blocks = ["192.168.0.48/28", "192.168.0.64/28", "192.168.0.80/28"]
   }
 
   egress {
@@ -286,56 +334,103 @@ resource "aws_security_group" "vivaldi_mysql_sg" {
   }
 }
 
-# Aurora RDS Cluster
-resource "aws_rds_cluster" "vivaldi_aurora_cluster" {
-  cluster_identifier      = "vivaldi"
-  engine                  = "aurora-mysql"
-  engine_version          = "8.0.mysql_aurora.3.05.2" # Specify the latest 8.0 compatible version available if needed
-  master_username         = var.db_username
-  master_password         = var.db_password
-  database_name           = var.db_name
-  availability_zones      = ["us-west-2b", "us-west-2c"]  # Multi-AZ deployment
-  db_subnet_group_name    = aws_db_subnet_group.vivaldi_db_subnet_group.name
-  vpc_security_group_ids  = [aws_security_group.vivaldi_mysql_sg.id] # Use the MySQL SG for access control
+# Application Load Balancer
+resource "aws_lb" "vivaldi_alb" {
+  name               = "vivaldi-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.vivaldi_frontend_sg.id]
+  subnets            = [
+    aws_subnet.vivaldi_public_subnet_1.id,
+    aws_subnet.vivaldi_public_subnet_2.id,
+    aws_subnet.vivaldi_public_subnet_3.id
+  ]
 
-  backup_retention_period = 7
-  preferred_backup_window = "07:00-09:00"
+  enable_deletion_protection = false
 
-    tags = {
-    Name = "Vivaldi-Aurora-Cluster"
+  tags = {
+    Name = "Vivaldi-ALB"
   }
 }
 
-resource "aws_rds_cluster_instance" "vivaldi_aurora_instance" {
-  count                    = 2
-  identifier               = "vivaldi-instance-${count.index}"
-  cluster_identifier       = aws_rds_cluster.vivaldi_aurora_cluster.id
-  instance_class           = "db.t3.medium"
-  engine                   = "aurora-mysql"
-  engine_version           = aws_rds_cluster.vivaldi_aurora_cluster.engine_version
-  publicly_accessible      = false
+# Target Group for ALB
+resource "aws_lb_target_group" "vivaldi_target_group" {
+  name     = "vivaldi-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.vivaldi_vpc.id
 
-  # Multi-AZ Deployment
-  availability_zone        = element(["us-west-2b", "us-west-2c"], count.index)
+  health_check {
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    protocol            = "HTTP"
+  }
 
+  tags = {
+    Name = "Vivaldi-Target-Group"
+  }
 }
+
+resource "aws_lb_listener" "vivaldi_listener" {
+  load_balancer_arn = aws_lb.vivaldi_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "forward"
+    target_group_arn = aws_lb_target_group.vivaldi_target_group.arn
+  }
+}
+
+# # Aurora RDS Cluster
+# resource "aws_rds_cluster" "vivaldi_aurora_cluster" {
+#   cluster_identifier      = "vivaldi"
+#   engine                  = "aurora-mysql"
+#   engine_version          = "8.0.mysql_aurora.3.05.2" # Specify the latest 8.0 compatible version available if needed
+#   master_username         = var.db_username
+#   master_password         = var.db_password
+#   database_name           = var.db_name
+#   availability_zones      = ["us-west-2b", "us-west-2c"]  # Multi-AZ deployment
+#   db_subnet_group_name    = aws_db_subnet_group.vivaldi_db_subnet_group.name
+#   vpc_security_group_ids  = [aws_security_group.vivaldi_mysql_sg.id] # Use the MySQL SG for access control
+
+#   backup_retention_period = 7
+#   preferred_backup_window = "07:00-09:00"
+
+#     tags = {
+#     Name = "Vivaldi-Aurora-Cluster"
+#   }
+# }
+
+# resource "aws_rds_cluster_instance" "vivaldi_aurora_instance" {
+#   count                    = 2
+#   identifier               = "vivaldi-instance-${count.index}"
+#   cluster_identifier       = aws_rds_cluster.vivaldi_aurora_cluster.id
+#   instance_class           = "db.t3.medium"
+#   engine                   = "aurora-mysql"
+#   engine_version           = aws_rds_cluster.vivaldi_aurora_cluster.engine_version
+#   publicly_accessible      = false
+
+#   # Multi-AZ Deployment
+#   availability_zone        = element(["us-west-2b", "us-west-2c"], count.index)
+
+# }
 
 # Frontend EC2 Instance
 resource "aws_instance" "vivaldi_frontend" {
   ami                    = "ami-04dd23e62ed049936"
   instance_type          = "t3.medium"
   associate_public_ip_address = true
-  subnet_id              = aws_subnet.vivaldi_public_subnet.id
+  subnet_id              = aws_subnet.vivaldi_public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.vivaldi_frontend_sg.id]
   
 
-    # User Data for nginx Installation
-  user_data = <<-EOF
-    #!/bin/bash
-    sudo apt update
-    sudo apt install -y nginx
-    sudo systemctl restart nginx
-  EOF
+  # User Data for nginx Installation
+  # Load the script from the template file
+  user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {})
 
   key_name = "vivaldi_key"  # Specify your SSH key here
 
@@ -364,10 +459,10 @@ resource "aws_instance" "vivaldi_backend" {
   }
 }
 
-# Outputs
-output "db_endpoint" {
-  value = aws_rds_cluster.vivaldi_aurora_cluster.endpoint
-}
+# # Outputs
+# output "db_endpoint" {
+#   value = aws_rds_cluster.vivaldi_aurora_cluster.endpoint
+# }
 
 # # S3 Bucket 
 # resource "aws_s3_bucket" "vivaldi_bucket" {
