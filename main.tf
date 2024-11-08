@@ -385,39 +385,39 @@ resource "aws_lb_listener" "vivaldi_listener" {
   }
 }
 
-# # Aurora RDS Cluster
-# resource "aws_rds_cluster" "vivaldi_aurora_cluster" {
-#   cluster_identifier      = "vivaldi"
-#   engine                  = "aurora-mysql"
-#   engine_version          = "8.0.mysql_aurora.3.05.2" # Specify the latest 8.0 compatible version available if needed
-#   master_username         = var.db_username
-#   master_password         = var.db_password
-#   database_name           = var.db_name
-#   availability_zones      = ["us-west-2b", "us-west-2c"]  # Multi-AZ deployment
-#   db_subnet_group_name    = aws_db_subnet_group.vivaldi_db_subnet_group.name
-#   vpc_security_group_ids  = [aws_security_group.vivaldi_mysql_sg.id] # Use the MySQL SG for access control
+# Aurora RDS Cluster
+resource "aws_rds_cluster" "vivaldi_aurora_cluster" {
+  cluster_identifier      = "vivaldi"
+  engine                  = "aurora-mysql"
+  engine_version          = "8.0.mysql_aurora.3.05.2" # Specify the latest 8.0 compatible version available if needed
+  master_username         = var.db_username
+  master_password         = var.db_password
+  database_name           = var.db_name
+  availability_zones      = ["us-west-2b", "us-west-2c"]  # Multi-AZ deployment
+  db_subnet_group_name    = aws_db_subnet_group.vivaldi_db_subnet_group.name
+  vpc_security_group_ids  = [aws_security_group.vivaldi_mysql_sg.id] # Use the MySQL SG for access control
 
-#   backup_retention_period = 7
-#   preferred_backup_window = "07:00-09:00"
+  backup_retention_period = 7
+  preferred_backup_window = "07:00-09:00"
 
-#     tags = {
-#     Name = "Vivaldi-Aurora-Cluster"
-#   }
-# }
+    tags = {
+    Name = "Vivaldi-Aurora-Cluster"
+  }
+}
 
-# resource "aws_rds_cluster_instance" "vivaldi_aurora_instance" {
-#   count                    = 2
-#   identifier               = "vivaldi-instance-${count.index}"
-#   cluster_identifier       = aws_rds_cluster.vivaldi_aurora_cluster.id
-#   instance_class           = "db.t3.medium"
-#   engine                   = "aurora-mysql"
-#   engine_version           = aws_rds_cluster.vivaldi_aurora_cluster.engine_version
-#   publicly_accessible      = false
+resource "aws_rds_cluster_instance" "vivaldi_aurora_instance" {
+  count                    = 2
+  identifier               = "vivaldi-instance-${count.index}"
+  cluster_identifier       = aws_rds_cluster.vivaldi_aurora_cluster.id
+  instance_class           = "db.t3.medium"
+  engine                   = "aurora-mysql"
+  engine_version           = aws_rds_cluster.vivaldi_aurora_cluster.engine_version
+  publicly_accessible      = false
 
-#   # Multi-AZ Deployment
-#   availability_zone        = element(["us-west-2b", "us-west-2c"], count.index)
+  # Multi-AZ Deployment
+  availability_zone        = element(["us-west-2b", "us-west-2c"], count.index)
 
-# }
+}
 
 # Frontend EC2 Instance
 resource "aws_instance" "vivaldi_frontend" {
@@ -459,10 +459,10 @@ resource "aws_instance" "vivaldi_backend" {
   }
 }
 
-# # Outputs
-# output "db_endpoint" {
-#   value = aws_rds_cluster.vivaldi_aurora_cluster.endpoint
-# }
+# Outputs
+output "db_endpoint" {
+  value = aws_rds_cluster.vivaldi_aurora_cluster.endpoint
+}
 
 # # S3 Bucket 
 # resource "aws_s3_bucket" "vivaldi_bucket" {
